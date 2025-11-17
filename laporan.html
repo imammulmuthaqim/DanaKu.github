@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan Bulanan - DanaKu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root {
+            --primary: #FF6B35;
+            --primary-light: #FF8E53;
+            --primary-dark: #E55A2B;
+            --secondary: #2A2D3E;
+            --accent: #FF9E64;
+            --light: #FFFFFF;
+            --light-bg: #FFF5F0;
+            --text: #333333;
+            --text-light: #6C757D;
+            --success: #4CAF50;
+            --warning: #FF9800;
+            --danger: #F44336;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --radius: 16px;
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--light-bg) 0%, #FFF9F5 100%);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+
+        /* Header Styles */
+        header {
+            background: var(--light);
+            padding: 15px 0;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .back-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .back-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        /* Main Content Styles */
+        .page-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--light);
+            border-radius: var(--radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+            margin-bottom: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title i {
+            color: var(--primary);
+        }
+
+        /* Filter Styles */
+        .filter-section {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .filter-select {
+            padding: 10px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            background: var(--light);
+            font-size: 0.9rem;
+            transition: var(--transition);
+            min-width: 150px;
+        }
+
+        .filter-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+            outline: none;
+        }
+
+        /* Summary Grid */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white;
+            padding: 25px;
+            border-radius: 16px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(255, 107, 53, 0.3);
+        }
+
+        .summary-card.pemasukan {
+            background: linear-gradient(135deg, var(--success), #66BB6A);
+        }
+
+        .summary-card.pengeluaran {
+            background: linear-gradient(135deg, var(--danger), #EF5350);
+        }
+
+        .summary-card.saldo {
+            background: linear-gradient(135deg, var(--warning), #FFA726);
+        }
+
+        .summary-label {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .summary-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        /* Detail Section */
+        .detail-section {
+            margin-top: 30px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .detail-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            transition: var(--transition);
+        }
+
+        .detail-card:hover {
+            border-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+
+        .detail-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detail-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .positive {
+            color: var(--success);
+        }
+
+        .negative {
+            color: var(--danger);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-light);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #dee2e6;
+        }
+
+        .empty-state h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            color: var(--text-light);
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--secondary);
+            color: white;
+            padding: 30px 0 15px;
+            margin-top: 50px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .footer-logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary-light);
+        }
+
+        .footer-links h3 {
+            font-size: 1rem;
+            margin-bottom: 12px;
+            color: var(--accent);
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links ul li {
+            margin-bottom: 6px;
+        }
+
+        .footer-links ul li a {
+            color: #ddd;
+            text-decoration: none;
+            transition: var(--transition);
+            font-size: 0.85rem;
+        }
+
+        .footer-links ul li a:hover {
+            color: var(--primary-light);
+        }
+
+        .copyright {
+            text-align: center;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #aaa;
+            font-size: 0.8rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 10px;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .page-title {
+                font-size: 1.6rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .filter-section {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .filter-select {
+                width: 100%;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .page-title {
+                font-size: 1.4rem;
+            }
+
+            .card-title {
+                font-size: 1.2rem;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease forwards;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <a href="index.html" class="logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                    DanaKu
+                </a>
+                <a href="index.html" class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                    Kembali ke Beranda
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <!-- Page Header -->
+            <div class="page-header fade-in">
+                <h1 class="page-title">Laporan Bulanan</h1>
+                <p class="page-subtitle">Analisis pemasukan dan pengeluaran keuangan bisnis Anda</p>
+            </div>
+
+            <!-- Main Card -->
+            <div class="card fade-in">
+                <h2 class="card-title">
+                    <i class="fas fa-chart-line"></i>
+                    Ringkasan Keuangan
+                </h2>
+
+                <!-- Filter Section -->
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label class="filter-label">Tahun</label>
+                        <select class="filter-select" id="tahun-laporan">
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Bulan</label>
+                        <select class="filter-select" id="bulan-laporan">
+                            <option value="0">Januari</option>
+                            <option value="1">Februari</option>
+                            <option value="2">Maret</option>
+                            <option value="3">April</option>
+                            <option value="4">Mei</option>
+                            <option value="5">Juni</option>
+                            <option value="6">Juli</option>
+                            <option value="7">Agustus</option>
+                            <option value="8">September</option>
+                            <option value="9">Oktober</option>
+                            <option value="10">November</option>
+                            <option value="11">Desember</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Summary Grid -->
+                <div class="summary-grid">
+                    <div class="summary-card pemasukan">
+                        <div class="summary-label">Total Pemasukan</div>
+                        <div class="summary-value" id="total-pemasukan">Rp 0</div>
+                    </div>
+                    <div class="summary-card pengeluaran">
+                        <div class="summary-label">Total Pengeluaran</div>
+                        <div class="summary-value" id="total-pengeluaran">Rp 0</div>
+                    </div>
+                    <div class="summary-card saldo">
+                        <div class="summary-label">Saldo Bersih</div>
+                        <div class="summary-value" id="saldo-bersih">Rp 0</div>
+                    </div>
+                </div>
+
+                <!-- Detail Section -->
+                <div class="detail-section">
+                    <h3 class="card-title">
+                        <i class="fas fa-list-alt"></i>
+                        Detail Transaksi
+                    </h3>
+                    
+                    <div class="detail-grid">
+                        <div class="detail-card">
+                            <h4>
+                                <i class="fas fa-arrow-down positive"></i>
+                                Pemasukan
+                            </h4>
+                            <div class="detail-item">
+                                <div class="detail-label">Top Up Saldo</div>
+                                <div class="detail-value positive" id="pemasukan-topup">Rp 0</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Pembayaran Lunas</div>
+                                <div class="detail-value positive" id="pemasukan-lunas">Rp 0</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Komisi</div>
+                                <div class="detail-value positive" id="pemasukan-komisi">Rp 0</div>
+                            </div>
+                            <div class="detail-item" style="border-top: 2px solid var(--success); padding-top: 10px; margin-top: 5px;">
+                                <div class="detail-label" style="font-weight: 700;">Subtotal</div>
+                                <div class="detail-value positive" style="font-weight: 700;" id="subtotal-pemasukan">Rp 0</div>
+                            </div>
+                        </div>
+                        
+                        <div class="detail-card">
+                            <h4>
+                                <i class="fas fa-arrow-up negative"></i>
+                                Pengeluaran
+                            </h4>
+                            <div class="detail-item">
+                                <div class="detail-label">Pengajuan Dana</div>
+                                <div class="detail-value negative" id="pengeluaran-pengajuan">Rp 0</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Penarikan Komisi</div>
+                                <div class="detail-value negative" id="pengeluaran-penarikan">Rp 0</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Biaya Admin</div>
+                                <div class="detail-value negative" id="pengeluaran-admin">Rp 0</div>
+                            </div>
+                            <div class="detail-item" style="border-top: 2px solid var(--danger); padding-top: 10px; margin-top: 5px;">
+                                <div class="detail-label" style="font-weight: 700;">Subtotal</div>
+                                <div class="detail-value negative" style="font-weight: 700;" id="subtotal-pengeluaran">Rp 0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="laporan-kosong" class="empty-state">
+                    <i class="fas fa-chart-pie"></i>
+                    <h3>Belum Ada Data Laporan</h3>
+                    <p>Laporan keuangan akan muncul di sini setelah Anda melakukan transaksi pertama</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-about">
+                    <div class="footer-logo">DanaKu</div>
+                    <p style="font-size: 0.85rem;">Platform pengajuan dana modern yang aman, cepat, dan terpercaya.</p>
+                </div>
+                
+                <div class="footer-links">
+                    <h3>Layanan</h3>
+                    <ul>
+                        <li><a href="pengajuan.html">Pengajuan Dana</a></li>
+                        <li><a href="bayar.html">Pembayaran</a></li>
+                        <li><a href="penarikan.html">Penarikan</a></li>
+                        <li><a href="laporan.html">Laporan</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-links">
+                    <h3>Bantuan</h3>
+                    <ul>
+                        <li><a href="#">Panduan</a></li>
+                        <li><a href="#">Syarat</a></li>
+                        <li><a href="#">Privasi</a></li>
+                        <li><a href="#">Kontak</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-links">
+                    <h3>Kontak</h3>
+                    <ul>
+                        <li><i class="fas fa-envelope"></i> info@danaku.id</li>
+                        <li><i class="fas fa-phone"></i> +62 21 1234 5678</li>
+                        <li><i class="fas fa-map-marker-alt"></i> Jakarta</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="copyright">
+                &copy; 2023 DanaKu. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Konfigurasi Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAHqg6LY-Vr3DsfNrMA9gwTyl0xi7jiQWc",
+            authDomain: "danapengajuan-3fe67.firebaseapp.com",
+            databaseURL: "https://danapengajuan-3fe67-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "danapengajuan-3fe67",
+            storageBucket: "danapengajuan-3fe67.firebasestorage.app",
+            messagingSenderId: "231562139072",
+            appId: "1:231562139072:web:ef64922c3d4b5d1fe92425"
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Fungsi untuk memformat angka ke format Rupiah
+        function formatRupiah(angka) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(angka);
+        }
+
+        // Fungsi untuk load laporan - YANG UDAH DIPERBAIKI
+        function loadLaporan() {
+            const tahun = document.getElementById('tahun-laporan').value;
+            const bulan = parseInt(document.getElementById('bulan-laporan').value);
+            
+            console.log('Loading laporan untuk:', tahun, 'Bulan:', bulan + 1);
+            
+            // Load semua data yang diperlukan
+            Promise.all([
+                database.ref('pengajuan').once('value'),
+                database.ref('history').once('value'),
+                database.ref('penarikan').once('value'),
+                database.ref('komisi').once('value')
+            ]).then(([pengajuanSnapshot, historySnapshot, penarikanSnapshot, komisiSnapshot]) => {
+                const pengajuanData = pengajuanSnapshot.val() || {};
+                const historyData = historySnapshot.val() || {};
+                const penarikanData = penarikanSnapshot.val() || {};
+                const komisiData = komisiSnapshot.val() || 0;
+                
+                // Hitung laporan dengan logic yang benar
+                hitungLaporan(pengajuanData, historyData, penarikanData, komisiData, tahun, bulan);
+            }).catch(error => {
+                console.error('Error loading data:', error);
+            });
+        }
+
+        // Fungsi untuk menghitung laporan - YANG UDAH DIPERBAIKI
+        function hitungLaporan(pengajuanData, historyData, penarikanData, komisiData, tahun, bulan) {
+            // Reset semua nilai
+            let totalPemasukan = 0;
+            let totalPengeluaran = 0;
+            
+            // VARIABEL PEMASUKAN
+            let pemasukanTopup = 0;
+            let pemasukanLunas = 0;
+            let pemasukanKomisi = 0;
+            
+            // VARIABEL PENGELUARAN  
+            let pengeluaranPengajuan = 0;
+            let pengeluaranPenarikan = 0;
+            let pengeluaranAdmin = 0;
+            
+            console.log('Menghitung laporan...');
+            
+            // 1. PROSES DATA TOPUP (PEMASUKAN)
+            Object.keys(historyData).forEach(key => {
+                const item = historyData[key];
+                if (item.jenis === 'topup') {
+                    const itemDate = new Date(item.waktu);
+                    if (itemDate.getFullYear() == tahun && itemDate.getMonth() == bulan) {
+                        pemasukanTopup += item.nominal;
+                        console.log('Topup ditemukan:', item.nominal);
+                    }
+                }
+            });
+            
+            // 2. PROSES DATA PENGAJUAN YANG LUNAS (PEMASUKAN & PENGELUARAN)
+            Object.keys(pengajuanData).forEach(key => {
+                const item = pengajuanData[key];
+                const itemDate = new Date(item.waktuPengajuan);
+                
+                if (itemDate.getFullYear() == tahun && itemDate.getMonth() == bulan) {
+                    if (item.status === 'lunas') {
+                        // PENGELUARAN: Nominal yang dikeluarkan ke user
+                        pengeluaranPengajuan += item.nominal;
+                        
+                        // PEMASUKAN: Admin yang diterima ketika lunas
+                        pemasukanLunas += item.admin;
+                        
+                        // PEMASUKAN: Komisi yang diterima ketika lunas  
+                        pemasukanKomisi += item.komisi;
+                        
+                        console.log('Pengajuan lunas:', item.nominal, 'Admin:', item.admin, 'Komisi:', item.komisi);
+                    } else if (item.status === 'acc' || item.status === 'belum-bayar') {
+                        // PENGELUARAN: Hanya nominal yang sudah dikeluarkan
+                        pengeluaranPengajuan += item.nominal;
+                        console.log('Pengajuan ACC/Belum Bayar:', item.nominal);
+                    }
+                    
+                    // PENGELUARAN: Biaya admin (selalu dihitung sebagai pengeluaran)
+                    pengeluaranAdmin += item.admin;
+                }
+            });
+            
+            // 3. PROSES DATA PENARIKAN (PENGELUARAN)
+            Object.keys(penarikanData).forEach(key => {
+                const item = penarikanData[key];
+                const itemDate = new Date(item.waktu);
+                
+                if (itemDate.getFullYear() == tahun && itemDate.getMonth() == bulan) {
+                    pengeluaranPenarikan += item.jumlah;
+                    console.log('Penarikan ditemukan:', item.jumlah);
+                }
+            });
+            
+            // HITUNG TOTAL
+            totalPemasukan = pemasukanTopup + pemasukanLunas + pemasukanKomisi;
+            totalPengeluaran = pengeluaranPengajuan + pengeluaranPenarikan + pengeluaranAdmin;
+            const saldoBersih = totalPemasukan - totalPengeluaran;
+            
+            console.log('Hasil perhitungan:');
+            console.log('Pemasukan - Topup:', pemasukanTopup, 'Lunas:', pemasukanLunas, 'Komisi:', pemasukanKomisi);
+            console.log('Pengeluaran - Pengajuan:', pengeluaranPengajuan, 'Penarikan:', pengeluaranPenarikan, 'Admin:', pengeluaranAdmin);
+            console.log('Total Pemasukan:', totalPemasukan, 'Total Pengeluaran:', totalPengeluaran, 'Saldo Bersih:', saldoBersih);
+            
+            // UPDATE UI
+            document.getElementById('total-pemasukan').textContent = formatRupiah(totalPemasukan);
+            document.getElementById('total-pengeluaran').textContent = formatRupiah(totalPengeluaran);
+            document.getElementById('saldo-bersih').textContent = formatRupiah(saldoBersih);
+            
+            // Update detail pemasukan
+            document.getElementById('pemasukan-topup').textContent = formatRupiah(pemasukanTopup);
+            document.getElementById('pemasukan-lunas').textContent = formatRupiah(pemasukanLunas);
+            document.getElementById('pemasukan-komisi').textContent = formatRupiah(pemasukanKomisi);
+            document.getElementById('subtotal-pemasukan').textContent = formatRupiah(totalPemasukan);
+            
+            // Update detail pengeluaran
+            document.getElementById('pengeluaran-pengajuan').textContent = formatRupiah(pengeluaranPengajuan);
+            document.getElementById('pengeluaran-penarikan').textContent = formatRupiah(pengeluaranPenarikan);
+            document.getElementById('pengeluaran-admin').textContent = formatRupiah(pengeluaranAdmin);
+            document.getElementById('subtotal-pengeluaran').textContent = formatRupiah(totalPengeluaran);
+            
+            // Tampilkan empty state jika tidak ada data
+            const emptyState = document.getElementById('laporan-kosong');
+            if (totalPemasukan === 0 && totalPengeluaran === 0) {
+                emptyState.style.display = 'block';
+            } else {
+                emptyState.style.display = 'none';
+            }
+        }
+
+        // Event listener untuk filter
+        document.getElementById('tahun-laporan').addEventListener('change', loadLaporan);
+        document.getElementById('bulan-laporan').addEventListener('change', loadLaporan);
+
+        // Inisialisasi
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set bulan dan tahun saat ini
+            const now = new Date();
+            document.getElementById('tahun-laporan').value = now.getFullYear();
+            document.getElementById('bulan-laporan').value = now.getMonth();
+            
+            loadLaporan();
+        });
+    </script>
+</body>
+</html>
