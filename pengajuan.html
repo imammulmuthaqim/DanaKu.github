@@ -244,6 +244,53 @@
             font-size: 1.1rem;
         }
 
+        /* Info Admin */
+        .info-admin {
+            background: #fff3e0;
+            border: 2px solid #ffb74d;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-admin-title {
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .admin-rules {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .admin-rule {
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .admin-range {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .admin-fee {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .admin-komisi {
+            color: var(--warning);
+            font-weight: 600;
+        }
+
         /* Struk Section */
         .struk-section {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -426,6 +473,10 @@
                 text-align: center;
             }
 
+            .admin-rules {
+                grid-template-columns: 1fr;
+            }
+
             .footer-content {
                 grid-template-columns: repeat(2, 1fr);
                 gap: 15px;
@@ -512,6 +563,26 @@
                 <div class="saldo-info">
                     <div class="saldo-label">Saldo Tersedia:</div>
                     <div class="saldo-amount" id="saldo-tersedia">Rp 0</div>
+                </div>
+
+                <!-- Info Admin -->
+                <div class="info-admin">
+                    <div class="info-admin-title">
+                        <i class="fas fa-info-circle"></i>
+                        Ketentuan Biaya Admin
+                    </div>
+                    <div class="admin-rules">
+                        <div class="admin-rule">
+                            <div class="admin-range">Rp 0 - 30.000</div>
+                            <div class="admin-fee">Admin: Rp 3.000</div>
+                            <div class="admin-komisi">Komisi: Rp 1.000</div>
+                        </div>
+                        <div class="admin-rule">
+                            <div class="admin-range">Rp 30.001+</div>
+                            <div class="admin-fee">Admin: Rp 5.000</div>
+                            <div class="admin-komisi">Komisi: Rp 2.000</div>
+                        </div>
+                    </div>
                 </div>
                 
                 <form id="form-pengajuan">
@@ -798,22 +869,22 @@
             updateStruk();
         });
 
-        // Fungsi untuk update struk
+        // Fungsi untuk update struk - YANG UDAH DIPERBAIKI
         function updateStruk() {
             const nomorRekening = document.getElementById('nomor-rekening').value;
             const namaRekening = document.getElementById('nama-rekening').value;
             const bank = document.getElementById('nama-bank').value;
             const nominal = parseInt(document.getElementById('nominal-saldo').value) || 0;
             
-            // Hitung admin dan komisi
+            // Hitung admin dan komisi YANG BENAR
             let admin = 0;
             let komisiTransaksi = 0;
             
             if (nominal > 0) {
-                if (nominal <= 300000) {
+                if (nominal <= 30000) {  // 0 - 30rb
                     admin = 3000;
                     komisiTransaksi = 1000;
-                } else {
+                } else {  // di atas 30rb
                     admin = 5000;
                     komisiTransaksi = 2000;
                 }
@@ -844,7 +915,7 @@
             document.getElementById('struk-total').textContent = 'Rp 0';
         }
 
-        // Event listener untuk form pengajuan - YANG UDAH DIPERBAIKI (KOMISI CUMA DI BAYAR.HTML)
+        // Event listener untuk form pengajuan - YANG UDAH DIPERBAIKI
         document.getElementById('form-pengajuan').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -870,14 +941,14 @@
                 return;
             }
             
-            // Hitung admin dan komisi
+            // Hitung admin dan komisi YANG BENAR
             let admin = 0;
             let komisiTransaksi = 0;
             
-            if (nominal <= 300000) {
+            if (nominal <= 30000) {  // 0 - 30rb
                 admin = 3000;
                 komisiTransaksi = 1000;
-            } else {
+            } else {  // di atas 30rb
                 admin = 5000;
                 komisiTransaksi = 2000;
             }
