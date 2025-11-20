@@ -244,6 +244,52 @@
             font-size: 1.1rem;
         }
 
+        /* Saldo Warning Styles */
+        .saldo-warning {
+            background: #ffebee;
+            border: 2px solid #f44336;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #c62828;
+            font-size: 0.9rem;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .saldo-warning i {
+            color: #f44336;
+        }
+
+        .saldo-sufficient {
+            background: #e8f5e8;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #2e7d32;
+            font-size: 0.9rem;
+        }
+
+        .saldo-sufficient i {
+            color: #4CAF50;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
         /* Info Admin */
         .info-admin {
             background: #fff3e0;
@@ -366,6 +412,14 @@
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(255, 107, 53, 0.3);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.6;
         }
 
         /* Alert Styles */
@@ -627,7 +681,20 @@
                             <i class="fas fa-money-bill-wave"></i>
                             Nominal Saldo
                         </label>
-                        <input type="number" id="nominal-saldo" class="form-input" required placeholder="Masukkan nominal yang diajukan" min="1000">
+                        <input type="number" id="nominal-saldo" class="form-input" required 
+                               placeholder="Masukkan nominal yang diajukan" min="1000">
+                        
+                        <!-- Saldo Warning -->
+                        <div id="saldo-warning" class="saldo-warning hidden">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Saldo tidak cukup! Saldo tersedia: <strong id="saldo-tersedia-text">Rp 0</strong></span>
+                        </div>
+                        
+                        <!-- Saldo Sufficient -->
+                        <div id="saldo-sufficient" class="saldo-sufficient hidden">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Saldo mencukupi</span>
+                        </div>
                     </div>
                     
                     <!-- Struk Section -->
@@ -671,7 +738,7 @@
                         </div>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
                         <i class="fas fa-paper-plane"></i>
                         Kirim Pengajuan
                     </button>
@@ -740,8 +807,9 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Variabel global untuk menyimpan data users
+        // Variabel global untuk menyimpan data users dan saldo
         let usersData = {};
+        let currentSaldo = 0;
 
         // Fungsi untuk memformat angka ke format Rupiah
         function formatRupiah(angka) {
@@ -808,15 +876,44 @@
             });
         }
 
-        // Load saldo
+        // Load saldo dengan real-time update
         function loadSaldo() {
             database.ref('saldo').on('value', function(snapshot) {
-                let saldo = 0;
-                if (snapshot.exists()) {
-                    saldo = snapshot.val();
-                }
-                document.getElementById('saldo-tersedia').textContent = formatRupiah(saldo);
+                currentSaldo = snapshot.exists() ? snapshot.val() : 0;
+                document.getElementById('saldo-tersedia').textContent = formatRupiah(currentSaldo);
+                document.getElementById('saldo-tersedia-text').textContent = formatRupiah(currentSaldo);
+                
+                // Validasi ulang saat saldo berubah
+                validateSaldo();
             });
+        }
+
+        // Fungsi validasi saldo real-time
+        function validateSaldo() {
+            const nominalInput = document.getElementById('nominal-saldo');
+            const nominal = parseInt(nominalInput.value) || 0;
+            const saldoWarning = document.getElementById('saldo-warning');
+            const saldoSufficient = document.getElementById('saldo-sufficient');
+            const submitButton = document.getElementById('submit-btn');
+            
+            if (nominal > 0) {
+                if (nominal > currentSaldo) {
+                    // Saldo tidak cukup
+                    saldoWarning.classList.remove('hidden');
+                    saldoSufficient.classList.add('hidden');
+                    submitButton.disabled = true;
+                } else {
+                    // Saldo cukup
+                    saldoWarning.classList.add('hidden');
+                    saldoSufficient.classList.remove('hidden');
+                    submitButton.disabled = false;
+                }
+            } else {
+                // Nominal kosong
+                saldoWarning.classList.add('hidden');
+                saldoSufficient.classList.add('hidden');
+                submitButton.disabled = false;
+            }
         }
 
         // Event listener untuk deteksi nomor rekening
@@ -867,24 +964,25 @@
         // Event listener untuk nominal saldo
         document.getElementById('nominal-saldo').addEventListener('input', function() {
             updateStruk();
+            validateSaldo();
         });
 
-        // Fungsi untuk update struk - YANG UDAH DIPERBAIKI
+        // Fungsi untuk update struk
         function updateStruk() {
             const nomorRekening = document.getElementById('nomor-rekening').value;
             const namaRekening = document.getElementById('nama-rekening').value;
             const bank = document.getElementById('nama-bank').value;
             const nominal = parseInt(document.getElementById('nominal-saldo').value) || 0;
             
-            // Hitung admin dan komisi YANG BENAR
+            // Hitung admin dan komisi
             let admin = 0;
             let komisiTransaksi = 0;
             
             if (nominal > 0) {
-                if (nominal <= 30000) {  // 0 - 30rb
+                if (nominal <= 30000) {
                     admin = 3000;
                     komisiTransaksi = 1000;
-                } else {  // di atas 30rb
+                } else {
                     admin = 5000;
                     komisiTransaksi = 2000;
                 }
@@ -915,7 +1013,7 @@
             document.getElementById('struk-total').textContent = 'Rp 0';
         }
 
-        // Event listener untuk form pengajuan - YANG UDAH DIPERBAIKI
+        // Event listener untuk form pengajuan
         document.getElementById('form-pengajuan').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -934,6 +1032,12 @@
                 return;
             }
             
+            // Validasi saldo sebelum proses
+            if (nominal > currentSaldo) {
+                showAlert('error', `Saldo tidak cukup! Saldo tersedia: ${formatRupiah(currentSaldo)}, diperlukan: ${formatRupiah(nominal)}`);
+                return;
+            }
+            
             // Cek apakah user terdaftar
             const foundUser = findUserByPhoneNumber(nomorRekening);
             if (!foundUser) {
@@ -941,36 +1045,25 @@
                 return;
             }
             
-            // Hitung admin dan komisi YANG BENAR
+            // Hitung admin dan komisi
             let admin = 0;
             let komisiTransaksi = 0;
             
-            if (nominal <= 30000) {  // 0 - 30rb
+            if (nominal <= 30000) {
                 admin = 3000;
                 komisiTransaksi = 1000;
-            } else {  // di atas 30rb
+            } else {
                 admin = 5000;
                 komisiTransaksi = 2000;
             }
             
             const total = nominal + admin;
             
-            // CEK SALDO CUKUP ATAU TIDAK
-            database.ref('saldo').once('value').then(snapshot => {
-                const saldoSekarang = snapshot.exists() ? snapshot.val() : 0;
-                
-                if (saldoSekarang < nominal) {
-                    showAlert('error', `Saldo tidak cukup! Saldo saat ini: ${formatRupiah(saldoSekarang)}, diperlukan: ${formatRupiah(nominal)}`);
-                    return;
-                }
-                
-                // KURANGI SALDO (hanya nominal, tidak termasuk admin)
-                const saldoBaru = saldoSekarang - nominal;
-                
-                return database.ref('saldo').set(saldoBaru);
-            }).then(() => {
-                // SIMPAN PENGAJUAN KE FIREBASE (TANPA TAMBAH KOMISI DI SINI)
-                // KOMISI AKAN DITAMBAH PAS STATUS LUNAS DI BAYAR.HTML
+            // Proses pengajuan - kurangi saldo
+            const saldoBaru = currentSaldo - nominal;
+            
+            database.ref('saldo').set(saldoBaru).then(() => {
+                // Simpan pengajuan ke Firebase
                 const timestamp = new Date().toISOString();
                 const pengajuanId = 'pengajuan_' + Date.now();
                 
@@ -980,7 +1073,7 @@
                     bank: bank,
                     nominal: nominal,
                     admin: admin,
-                    komisi: komisiTransaksi, // Simpan nilai komisi, tapi belum ditambah ke total komisi
+                    komisi: komisiTransaksi,
                     total: total,
                     status: 'acc',
                     waktuPengajuan: timestamp,
@@ -1023,6 +1116,7 @@
             loadUsers();
             loadSaldo();
             resetStruk();
+            validateSaldo();
         });
     </script>
 </body>
