@@ -337,6 +337,21 @@
             color: var(--primary);
         }
 
+        /* Denda Badge */
+        .denda-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+            background-color: rgba(244, 67, 54, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
         /* Payment Method Badge */
         .payment-badge {
             display: inline-flex;
@@ -435,6 +450,16 @@
         .btn-success:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning), #FFA726);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
         }
 
         /* Empty State */
@@ -771,8 +796,12 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Fungsi untuk memformat angka ke format Rupiah
+        // Fungsi untuk memformat angka ke format Rupiah - SUDAH DIFIX
         function formatRupiah(angka) {
+            // Validasi jika bukan number
+            if (isNaN(angka) || angka === null || angka === undefined) {
+                return 'Rp 0';
+            }
             return new Intl.NumberFormat('id-ID', {
                 style: 'currency',
                 currency: 'IDR',
@@ -802,6 +831,61 @@
             });
         }
 
+        // FUNGSI BARU: Hitung denda cumulative berdasarkan hari keterlambatan - SUDAH DIFIX
+        function hitungDenda(pengajuanData) {
+            const waktuReferensi = pengajuanData.waktuBelumBayar || pengajuanData.waktuAcc || pengajuanData.waktuPengajuan;
+            const waktuJatuhTempo = new Date(waktuReferensi);
+            waktuJatuhTempo.setDate(waktuJatuhTempo.getDate() + 3); // +3 hari
+            
+            const sekarang = new Date();
+            const selisihHari = Math.max(0, Math.floor((sekarang - waktuJatuhTempo) / (1000 * 60 * 60 * 24)));
+            
+            console.log('Hitung denda:', {
+                waktuReferensi: new Date(waktuReferensi),
+                waktuJatuhTempo: waktuJatuhTempo,
+                sekarang: sekarang,
+                selisihHari: selisihHari,
+                nominal: pengajuanData.nominal,
+                admin: pengajuanData.admin,
+                komisi: pengajuanData.komisi
+            });
+            
+            // PASTIKAN SEMUA NILAI NUMBER - FIX NaN
+            const adminAsli = Number(pengajuanData.admin) || 0;
+            const komisiAsli = Number(pengajuanData.komisi) || 0;
+            const nominal = Number(pengajuanData.nominal) || 0;
+            
+            if (selisihHari > 0) {
+                // DENDA CUMULATIVE: tambah adminAsli setiap hari keterlambatan
+                const dendaAdmin = adminAsli * selisihHari;
+                // Komisi juga ikut bertambah sesuai admin
+                const dendaKomisi = komisiAsli * selisihHari;
+                
+                return {
+                    hariKeterlambatan: selisihHari,
+                    dendaAdmin: dendaAdmin,
+                    dendaKomisi: dendaKomisi,
+                    totalDenda: dendaAdmin + dendaKomisi,
+                    adminBaru: adminAsli + dendaAdmin,
+                    komisiBaru: komisiAsli + dendaKomisi,
+                    totalBaru: nominal + adminAsli + dendaAdmin
+                };
+            }
+            
+            return null;
+        }
+
+        // FUNGSI BARU: Cek apakah pengajuan sudah jatuh tempo
+        function cekJatuhTempo(pengajuanData) {
+            if (pengajuanData.status !== 'belum-bayar') return false;
+            
+            const waktuReferensi = pengajuanData.waktuBelumBayar || pengajuanData.waktuAcc || pengajuanData.waktuPengajuan;
+            const waktuJatuhTempo = new Date(waktuReferensi);
+            waktuJatuhTempo.setDate(waktuJatuhTempo.getDate() + 3); // +3 hari
+            
+            return new Date() > waktuJatuhTempo;
+        }
+
         // Fungsi untuk toggle detail
         function toggleDetail(itemId) {
             const detail = document.getElementById('detail-' + itemId);
@@ -825,7 +909,18 @@
             }
         }
 
-        // Fungsi untuk render activity - YANG UDAH DIPERBAIKI
+        // Fungsi untuk mendapatkan teks status
+        function getStatusText(status) {
+            const texts = {
+                'acc': 'ACC',
+                'belum-bayar': 'BELUM BAYAR',
+                'jatuh-tempo': 'JATUH TEMPO',
+                'lunas': 'LUNAS'
+            };
+            return texts[status] || status.toUpperCase();
+        }
+
+        // Fungsi untuk render activity - SUDAH DIFIX
         function renderActivity(data, status) {
             const container = document.getElementById(`${status}-list`);
             
@@ -852,8 +947,9 @@
                     
                     // Tentukan icon dan warna berdasarkan status
                     let iconClass = '';
-                    let amountClass = 'negative'; // Default uang keluar (merah)
+                    let amountClass = 'negative';
                     let title = 'Pengajuan Dana';
+                    let dendaInfo = null;
                     
                     if (status === 'acc') {
                         iconClass = 'icon-acc';
@@ -861,12 +957,24 @@
                     } else if (status === 'belum-bayar') {
                         iconClass = 'icon-belum-bayar';
                         title = 'Belum Bayar';
+                        
+                        // Cek apakah sudah mendekati jatuh tempo
+                        const waktuReferensi = item.waktuBelumBayar || item.waktuAcc || item.waktuPengajuan;
+                        const waktuJatuhTempo = new Date(waktuReferensi);
+                        waktuJatuhTempo.setDate(waktuJatuhTempo.getDate() + 3);
+                        const sekarang = new Date();
+                        const selisihJam = (waktuJatuhTempo - sekarang) / (1000 * 60 * 60);
+                        
+                        if (selisihJam < 24 && selisihJam > 0) {
+                            title += ' ⚠️';
+                        }
                     } else if (status === 'jatuh-tempo') {
                         iconClass = 'icon-jatuh-tempo';
                         title = 'Jatuh Tempo';
+                        dendaInfo = hitungDenda(item);
                     } else if (status === 'lunas') {
                         iconClass = 'icon-lunas';
-                        amountClass = 'positive'; // Uang masuk (hijau)
+                        amountClass = 'positive';
                         title = 'Lunas';
                     }
                     
@@ -888,6 +996,23 @@
                         `;
                     }
                     
+                    // Buat denda badge jika ada denda
+                    let dendaBadge = '';
+                    if (dendaInfo) {
+                        dendaBadge = `
+                            <span class="denda-badge">
+                                <i class="fas fa-exclamation-circle"></i>
+                                DENDA ${dendaInfo.hariKeterlambatan} HARI
+                            </span>
+                        `;
+                    }
+                    
+                    // Tentukan nominal yang ditampilkan - FIX NaN
+                    let displayNominal = Number(item.nominal) || 0;
+                    if (dendaInfo) {
+                        displayNominal = Number(dendaInfo.totalBaru) || 0;
+                    }
+                    
                     html += `
                         <div class="activity-item" data-id="${key}" onclick="toggleDetail('${key}')">
                             <div class="activity-main">
@@ -902,13 +1027,14 @@
                                                 ${getStatusText(status)}
                                             </span>
                                             ${paymentBadge}
+                                            ${dendaBadge}
                                         </div>
                                         <div class="activity-meta">${item.namaRekening || 'User'}</div>
                                     </div>
                                 </div>
                                 <div class="activity-amount">
                                     <div class="amount ${amountClass}">
-                                        ${status === 'lunas' ? '+' : '-'} ${formatRupiah(item.nominal)}
+                                        ${status === 'lunas' ? '+' : '-'} ${formatRupiah(displayNominal)}
                                     </div>
                                     <div class="activity-date">${formatTanggal(item.waktuPengajuan)}</div>
                                 </div>
@@ -929,21 +1055,70 @@
                                         <span class="detail-value">${item.nomorRekening || '-'}</span>
                                     </div>
                                     <div class="detail-item">
-                                        <span class="detail-label">Nominal</span>
-                                        <span class="detail-value">${formatRupiah(item.nominal)}</span>
+                                        <span class="detail-label">Nominal Awal</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.nominal) || 0)}</span>
+                                    </div>
+                                    ${dendaInfo ? `
+                                    <div class="detail-item">
+                                        <span class="detail-label">Keterlambatan</span>
+                                        <span class="detail-value" style="color: var(--danger); font-weight: 700;">
+                                            ${dendaInfo.hariKeterlambatan} Hari
+                                        </span>
                                     </div>
                                     <div class="detail-item">
+                                        <span class="detail-label">Admin Awal</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.admin) || 0)}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Denda Admin (${formatRupiah(Number(item.admin) || 0)} × ${dendaInfo.hariKeterlambatan} hari)</span>
+                                        <span class="detail-value" style="color: var(--danger);">
+                                            + ${formatRupiah(dendaInfo.dendaAdmin)}
+                                        </span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Komisi Awal</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.komisi) || 0)}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Denda Komisi (${formatRupiah(Number(item.komisi) || 0)} × ${dendaInfo.hariKeterlambatan} hari)</span>
+                                        <span class="detail-value" style="color: var(--danger);">
+                                            + ${formatRupiah(dendaInfo.dendaKomisi)}
+                                        </span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Total Denda</span>
+                                        <span class="detail-value" style="color: var(--danger); font-weight: 700;">
+                                            ${formatRupiah(dendaInfo.totalDenda)}
+                                        </span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Admin + Denda</span>
+                                        <span class="detail-value">${formatRupiah(dendaInfo.adminBaru)}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Komisi + Denda</span>
+                                        <span class="detail-value">${formatRupiah(dendaInfo.komisiBaru)}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Total + Denda</span>
+                                        <span class="detail-value" style="font-weight: 700; color: var(--danger);">
+                                            ${formatRupiah(dendaInfo.totalBaru)}
+                                        </span>
+                                    </div>
+                                    ` : `
+                                    <div class="detail-item">
                                         <span class="detail-label">Biaya Admin</span>
-                                        <span class="detail-value">${formatRupiah(item.admin)}</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.admin) || 0)}</span>
                                     </div>
                                     <div class="detail-item">
                                         <span class="detail-label">Komisi</span>
-                                        <span class="detail-value">${formatRupiah(item.komisi)}</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.komisi) || 0)}</span>
                                     </div>
                                     <div class="detail-item">
                                         <span class="detail-label">Total</span>
-                                        <span class="detail-value">${formatRupiah(item.total)}</span>
+                                        <span class="detail-value">${formatRupiah(Number(item.total) || 0)}</span>
                                     </div>
+                                    `}
                                     ${item.paymentMethod ? `
                                     <div class="detail-item">
                                         <span class="detail-label">Metode Bayar</span>
@@ -977,9 +1152,9 @@
                                 </div>
                                 ${status === 'acc' ? `
                                 <div class="action-buttons">
-                                    <button class="btn btn-primary" onclick="ubahStatus('${key}', 'belum-bayar')">
-                                        <i class="fas fa-arrow-right"></i>
-                                        Ubah ke Belum Bayar
+                                    <button class="btn btn-warning" onclick="ubahStatus('${key}', 'belum-bayar')">
+                                        <i class="fas fa-clock"></i>
+                                        Ubah ke Belum Bayar (Batas 3 Hari)
                                     </button>
                                 </div>
                                 ` : ''}
@@ -999,18 +1174,7 @@
             }
         }
 
-        // Fungsi untuk mendapatkan teks status
-        function getStatusText(status) {
-            const texts = {
-                'acc': 'ACC',
-                'belum-bayar': 'BELUM BAYAR',
-                'jatuh-tempo': 'JATUH TEMPO',
-                'lunas': 'LUNAS'
-            };
-            return texts[status] || status.toUpperCase();
-        }
-
-        // Fungsi untuk ubah status pengajuan - YANG UDAH DIPERBAIKI DENGAN MODAL
+        // Fungsi untuk ubah status pengajuan
         function ubahStatus(pengajuanId, statusBaru) {
             const timestamp = new Date().toISOString();
             const updates = {};
@@ -1021,7 +1185,7 @@
                 
                 database.ref('pengajuan/' + pengajuanId).update(updates)
                     .then(() => {
-                        alert(`Status berhasil diubah menjadi ${getStatusText(statusBaru)}`);
+                        alert(`Status berhasil diubah menjadi ${getStatusText(statusBaru)}! User memiliki waktu 3 hari untuk membayar sebelum dikenakan denda.`);
                         loadPengajuan();
                     })
                     .catch(error => {
@@ -1029,123 +1193,187 @@
                     });
                     
             } else if (statusBaru === 'lunas') {
-                // TAMPILKAN MODAL PILIHAN TRANSFER/CASH
+                // TAMPILKAN MODAL PILIHAN TRANSFER/CASH DENGAN PERHITUNGAN DENDA CUMULATIVE
                 showPaymentMethodModal(pengajuanId, timestamp, updates);
             }
         }
 
         // Fungsi untuk show modal pilihan transfer/cash
         function showPaymentMethodModal(pengajuanId, timestamp, updates) {
-            // Buat modal
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;
-            `;
-            
-            modal.innerHTML = `
-                <div style="background: white; padding: 30px; border-radius: 16px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                    <h3 style="margin-bottom: 20px; color: var(--secondary);">
-                        <i class="fas fa-money-bill-wave"></i>
-                        Pilih Metode Pembayaran
-                    </h3>
-                    <p style="margin-bottom: 25px; color: var(--text-light);">
-                        Pilih metode pembayaran untuk transaksi ini:
-                    </p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
-                        <button id="btn-transfer" style="padding: 20px; border: 2px solid var(--primary); border-radius: 12px; background: white; color: var(--primary); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                            <i class="fas fa-money-bill-transfer" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
-                            Transfer
-                        </button>
-                        <button id="btn-cash" style="padding: 20px; border: 2px solid var(--success); border-radius: 12px; background: white; color: var(--success); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-                            <i class="fas fa-money-bill-wave" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
-                            Cash
-                        </button>
-                    </div>
-                    <button id="btn-cancel" style="padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; background: white; color: var(--text-light); cursor: pointer; transition: all 0.3s ease;">
-                        Batal
-                    </button>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-            
-            // Hover effects
-            const btnTransfer = document.getElementById('btn-transfer');
-            const btnCash = document.getElementById('btn-cash');
-            const btnCancel = document.getElementById('btn-cancel');
-            
-            btnTransfer.addEventListener('mouseenter', () => {
-                btnTransfer.style.background = 'var(--primary)';
-                btnTransfer.style.color = 'white';
-                btnTransfer.style.transform = 'translateY(-2px)';
-            });
-            
-            btnTransfer.addEventListener('mouseleave', () => {
-                btnTransfer.style.background = 'white';
-                btnTransfer.style.color = 'var(--primary)';
-                btnTransfer.style.transform = 'translateY(0)';
-            });
-            
-            btnCash.addEventListener('mouseenter', () => {
-                btnCash.style.background = 'var(--success)';
-                btnCash.style.color = 'white';
-                btnCash.style.transform = 'translateY(-2px)';
-            });
-            
-            btnCash.addEventListener('mouseleave', () => {
-                btnCash.style.background = 'white';
-                btnCash.style.color = 'var(--success)';
-                btnCash.style.transform = 'translateY(0)';
-            });
-            
-            btnCancel.addEventListener('mouseenter', () => {
-                btnCancel.style.background = '#f8f9fa';
-            });
-            
-            btnCancel.addEventListener('mouseleave', () => {
-                btnCancel.style.background = 'white';
-            });
-            
-            // Event listeners untuk modal
-            btnTransfer.addEventListener('click', function() {
-                processLunas(pengajuanId, timestamp, updates, 'transfer');
-                document.body.removeChild(modal);
-            });
-            
-            btnCash.addEventListener('click', function() {
-                processLunas(pengajuanId, timestamp, updates, 'cash');
-                document.body.removeChild(modal);
-            });
-            
-            btnCancel.addEventListener('click', function() {
-                document.body.removeChild(modal);
+            // Ambil data pengajuan dulu untuk hitung denda
+            database.ref('pengajuan/' + pengajuanId).once('value').then(snapshot => {
+                const pengajuanData = snapshot.val();
+                const dendaInfo = hitungDenda(pengajuanData);
+                
+                // Buat modal
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                `;
+                
+                let modalContent = '';
+                
+                if (dendaInfo) {
+                    // ADA DENDA CUMULATIVE
+                    modalContent = `
+                        <div style="background: white; padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                            <h3 style="margin-bottom: 20px; color: var(--danger);">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Pengajuan Jatuh Tempo - Ada Denda!
+                            </h3>
+                            <p style="margin-bottom: 15px; color: var(--text); text-align: left;">
+                                <strong>Keterlambatan:</strong> ${dendaInfo.hariKeterlambatan} hari<br>
+                                <strong>Denda Admin:</strong> ${formatRupiah(Number(pengajuanData.admin) || 0)} × ${dendaInfo.hariKeterlambatan} hari = ${formatRupiah(dendaInfo.dendaAdmin)}<br>
+                                <strong>Denda Komisi:</strong> ${formatRupiah(Number(pengajuanData.komisi) || 0)} × ${dendaInfo.hariKeterlambatan} hari = ${formatRupiah(dendaInfo.dendaKomisi)}<br>
+                                <strong>Total Denda:</strong> ${formatRupiah(dendaInfo.totalDenda)}<br><br>
+                                <strong>Rincian Pembayaran:</strong><br>
+                                - Nominal: ${formatRupiah(Number(pengajuanData.nominal) || 0)}<br>
+                                - Admin: ${formatRupiah(Number(pengajuanData.admin) || 0)}<br>
+                                - Denda: ${formatRupiah(dendaInfo.dendaAdmin)}<br>
+                                <strong>Total yang harus dibayar:</strong><br>
+                                <span style="font-size: 1.2rem; color: var(--danger); font-weight: 700;">
+                                    ${formatRupiah(dendaInfo.totalBaru)}
+                                </span>
+                            </p>
+                            <p style="margin-bottom: 25px; color: var(--text-light); font-size: 0.9rem;">
+                                <i class="fas fa-info-circle"></i>
+                                Pilih metode pembayaran:
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                                <button id="btn-transfer" style="padding: 20px; border: 2px solid var(--primary); border-radius: 12px; background: white; color: var(--primary); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fas fa-money-bill-transfer" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                    Transfer
+                                </button>
+                                <button id="btn-cash" style="padding: 20px; border: 2px solid var(--success); border-radius: 12px; background: white; color: var(--success); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fas fa-money-bill-wave" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                    Cash
+                                </button>
+                            </div>
+                            <button id="btn-cancel" style="padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; background: white; color: var(--text-light); cursor: pointer; transition: all 0.3s ease;">
+                                Batal
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // TANPA DENDA
+                    modalContent = `
+                        <div style="background: white; padding: 30px; border-radius: 16px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                            <h3 style="margin-bottom: 20px; color: var(--secondary);">
+                                <i class="fas fa-money-bill-wave"></i>
+                                Pilih Metode Pembayaran
+                            </h3>
+                            <p style="margin-bottom: 25px; color: var(--text-light);">
+                                Total yang harus dibayar: <strong>${formatRupiah(Number(pengajuanData.total) || 0)}</strong><br>
+                                Pilih metode pembayaran:
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                                <button id="btn-transfer" style="padding: 20px; border: 2px solid var(--primary); border-radius: 12px; background: white; color: var(--primary); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fas fa-money-bill-transfer" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                    Transfer
+                                </button>
+                                <button id="btn-cash" style="padding: 20px; border: 2px solid var(--success); border-radius: 12px; background: white; color: var(--success); font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                                    <i class="fas fa-money-bill-wave" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                                    Cash
+                                </button>
+                            </div>
+                            <button id="btn-cancel" style="padding: 10px 20px; border: 1px solid #ddd; border-radius: 8px; background: white; color: var(--text-light); cursor: pointer; transition: all 0.3s ease;">
+                                Batal
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                modal.innerHTML = modalContent;
+                document.body.appendChild(modal);
+                
+                // Hover effects
+                const btnTransfer = document.getElementById('btn-transfer');
+                const btnCash = document.getElementById('btn-cash');
+                const btnCancel = document.getElementById('btn-cancel');
+                
+                btnTransfer.addEventListener('mouseenter', () => {
+                    btnTransfer.style.background = 'var(--primary)';
+                    btnTransfer.style.color = 'white';
+                    btnTransfer.style.transform = 'translateY(-2px)';
+                });
+                
+                btnTransfer.addEventListener('mouseleave', () => {
+                    btnTransfer.style.background = 'white';
+                    btnTransfer.style.color = 'var(--primary)';
+                    btnTransfer.style.transform = 'translateY(0)';
+                });
+                
+                btnCash.addEventListener('mouseenter', () => {
+                    btnCash.style.background = 'var(--success)';
+                    btnCash.style.color = 'white';
+                    btnCash.style.transform = 'translateY(-2px)';
+                });
+                
+                btnCash.addEventListener('mouseleave', () => {
+                    btnCash.style.background = 'white';
+                    btnCash.style.color = 'var(--success)';
+                    btnCash.style.transform = 'translateY(0)';
+                });
+                
+                btnCancel.addEventListener('mouseenter', () => {
+                    btnCancel.style.background = '#f8f9fa';
+                });
+                
+                btnCancel.addEventListener('mouseleave', () => {
+                    btnCancel.style.background = 'white';
+                });
+                
+                // Event listeners untuk modal
+                btnTransfer.addEventListener('click', function() {
+                    processLunas(pengajuanId, timestamp, updates, 'transfer', dendaInfo);
+                    document.body.removeChild(modal);
+                });
+                
+                btnCash.addEventListener('click', function() {
+                    processLunas(pengajuanId, timestamp, updates, 'cash', dendaInfo);
+                    document.body.removeChild(modal);
+                });
+                
+                btnCancel.addEventListener('click', function() {
+                    document.body.removeChild(modal);
+                });
+                
+            }).catch(error => {
+                alert('Error: ' + error.message);
             });
         }
 
         // Fungsi untuk proses lunas dengan metode pembayaran
-        function processLunas(pengajuanId, timestamp, updates, paymentMethod) {
+        function processLunas(pengajuanId, timestamp, updates, paymentMethod, dendaInfo) {
             database.ref('pengajuan/' + pengajuanId).once('value').then(snapshot => {
                 const pengajuanData = snapshot.val();
-                const nominal = pengajuanData.nominal;
-                const admin = pengajuanData.admin;
-                const komisi = pengajuanData.komisi;
-                const totalTambah = nominal + admin;
+                let nominal = Number(pengajuanData.nominal) || 0;
+                let admin = Number(pengajuanData.admin) || 0;
+                let komisi = Number(pengajuanData.komisi) || 0;
+                let totalTambah = nominal + admin;
+                
+                // Jika ada denda, gunakan nilai yang sudah termasuk denda
+                if (dendaInfo) {
+                    admin = dendaInfo.adminBaru;
+                    komisi = dendaInfo.komisiBaru;
+                    totalTambah = dendaInfo.totalBaru;
+                }
                 
                 // Tentukan saldo yang akan diupdate berdasarkan payment method
                 const saldoRef = paymentMethod === 'transfer' ? 'saldo' : 'saldo_cash';
                 
                 // Ambil saldo yang dipilih
                 return database.ref(saldoRef).once('value').then(saldoSnapshot => {
-                    const saldoSekarang = saldoSnapshot.exists() ? saldoSnapshot.val() : 0;
+                    const saldoSekarang = saldoSnapshot.exists() ? Number(saldoSnapshot.val()) || 0 : 0;
                     const saldoBaru = saldoSekarang + totalTambah;
                     
                     // Update saldo yang dipilih
@@ -1153,7 +1381,7 @@
                 }).then(() => {
                     // Update komisi
                     return database.ref('komisi').once('value').then(komisiSnapshot => {
-                        const komisiSekarang = komisiSnapshot.exists() ? komisiSnapshot.val() : 0;
+                        const komisiSekarang = komisiSnapshot.exists() ? Number(komisiSnapshot.val()) || 0 : 0;
                         const komisiBaru = komisiSekarang + komisi;
                         return database.ref('komisi').set(komisiBaru);
                     });
@@ -1162,7 +1390,15 @@
                 // Update status pengajuan jadi lunas
                 updates['waktuLunas'] = timestamp;
                 updates['status'] = 'lunas';
-                updates['paymentMethod'] = paymentMethod; // Simpan metode pembayaran
+                updates['paymentMethod'] = paymentMethod;
+                
+                // Jika ada denda, simpan info denda
+                if (dendaInfo) {
+                    updates['dendaInfo'] = dendaInfo;
+                    updates['adminAkhir'] = dendaInfo.adminBaru;
+                    updates['komisiAkhir'] = dendaInfo.komisiBaru;
+                    updates['totalAkhir'] = dendaInfo.totalBaru;
+                }
                 
                 return database.ref('pengajuan/' + pengajuanId).update(updates);
             }).then(() => {
@@ -1170,17 +1406,24 @@
                 return database.ref('pengajuan/' + pengajuanId).once('value');
             }).then(snapshot => {
                 const pengajuanData = snapshot.val();
-                const nominal = pengajuanData.nominal;
-                const admin = pengajuanData.admin;
-                const komisi = pengajuanData.komisi;
+                const nominal = Number(pengajuanData.nominal) || 0;
+                const admin = dendaInfo ? pengajuanData.adminAkhir : Number(pengajuanData.admin) || 0;
+                const komisi = dendaInfo ? pengajuanData.komisiAkhir : Number(pengajuanData.komisi) || 0;
                 const totalTambah = nominal + admin;
                 
                 const saldoType = paymentMethod === 'transfer' ? 'Saldo Transfer' : 'Saldo Cash';
                 
-                alert(`Status berhasil diubah menjadi LUNAS! 
+                let alertMessage = `Status berhasil diubah menjadi LUNAS! 
 ${saldoType} bertambah ${formatRupiah(totalTambah)} 
-(${formatRupiah(nominal)} + ${formatRupiah(admin)} admin)
-Komisi bertambah ${formatRupiah(komisi)}`);
+(${formatRupiah(nominal)} + ${formatRupiah(admin)} admin)`;
+                
+                if (dendaInfo) {
+                    alertMessage += `\n\n⚠️ TERMASUK DENDA ${dendaInfo.hariKeterlambatan} HARI!`;
+                }
+                
+                alertMessage += `\nKomisi bertambah ${formatRupiah(komisi)}`;
+                
+                alert(alertMessage);
                 loadPengajuan();
             }).catch(error => {
                 alert('Error: ' + error.message);
@@ -1193,6 +1436,7 @@ Komisi bertambah ${formatRupiah(komisi)}`);
             database.ref('pengajuan').once('value')
                 .then(snapshot => {
                     const data = snapshot.val() || {};
+                    const updates = {};
                     
                     const groupedData = {
                         'acc': {},
@@ -1206,16 +1450,15 @@ Komisi bertambah ${formatRupiah(komisi)}`);
                         
                         if (!item.status) return;
                         
-                        // Cek jika jatuh tempo
-                        if (item.status === 'belum-bayar') {
-                            const waktuReferensi = item.waktuBelumBayar || item.waktuAcc || item.waktuPengajuan;
-                            const waktuJatuhTempo = new Date(waktuReferensi);
-                            waktuJatuhTempo.setDate(waktuJatuhTempo.getDate() + 3);
-                            
-                            if (new Date() > waktuJatuhTempo) {
-                                groupedData['jatuh-tempo'][key] = item;
-                                return;
+                        // CEK OTOMATIS JATUH TEMPO - BARU
+                        if (item.status === 'belum-bayar' && cekJatuhTempo(item)) {
+                            // Otomatis pindah ke jatuh tempo
+                            groupedData['jatuh-tempo'][key] = item;
+                            // Update status di Firebase jika belum update
+                            if (item.status !== 'jatuh-tempo') {
+                                updates[key] = { status: 'jatuh-tempo' };
                             }
+                            return;
                         }
                         
                         // Group berdasarkan status
@@ -1223,6 +1466,11 @@ Komisi bertambah ${formatRupiah(komisi)}`);
                             groupedData[item.status][key] = item;
                         }
                     });
+                    
+                    // Update status jatuh tempo di Firebase jika ada
+                    if (Object.keys(updates).length > 0) {
+                        database.ref('pengajuan').update(updates);
+                    }
                     
                     // Render untuk setiap tab
                     Object.keys(groupedData).forEach(status => {
@@ -1265,6 +1513,9 @@ Komisi bertambah ${formatRupiah(komisi)}`);
         document.addEventListener('DOMContentLoaded', function() {
             loadPengajuan();
             setupRealtimeListener();
+            
+            // Auto refresh setiap 1 jam untuk cek jatuh tempo
+            setInterval(loadPengajuan, 60 * 60 * 1000);
         });
     </script>
 </body>
